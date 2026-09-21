@@ -47,6 +47,48 @@ func TestEnvelopeToNetworkMap_RoundTrip(t *testing.T) {
 	require.NotEmpty(t, result.NetworkMap.FirewallRules, "two-peer allow policy should produce firewall rules")
 }
 
+
+// TestEnvelopeToNetworkMap_NameServerGroupForCustomDistributionGroup reproduces
+// the DNS portion of #7334 at the component-envelope boundary.
+func TestEnvelopeToNetworkMap_NameServerGroupForCustomDistributionGroup(t *testing.T) {
+	c, localPeerKey := buildSmokeComponents(t)
+
+	c.Groups["group-all"].Name = "dns-clients"
+	c.Groups["group-all"].Peers = []string{"peer-A"}
+	c.NameServerGroups = []*nmdata.NameServerGroup{{
+		ID:       "nsg-internal",
+		PublicID: "nsg-public",
+		NameServers: []nmdata.NameServer{{
+			IP:     c.Peers["peer-B"].IP,
+			NSType: 1,
+			Port:   5353,
+		}},
+		Groups:  []string{"group-all"},
+		Primary: true,
+		Enabled: true,
+	}}
+
+	envelope := mgmtgrpc.EncodeNetworkMapEnvelope(mgmtgrpc.ComponentsEnvelopeInput{
+		Components: c,
+		DNSDomain:  "netbird.cloud",
+	})
+	wire, err := goproto.Marshal(envelope)
+	require.NoError(t, err, "marshal envelope")
+
+	var decoded proto.NetworkMapEnvelope
+	require.NoError(t, goproto.Unmarshal(wire, &decoded), "unmarshal envelope")
+
+	result, err := nbnetworkmap.EnvelopeToNetworkMap(context.Background(), &decoded, localPeerKey, "netbird.cloud")
+	require.NoError(t, err, "EnvelopeToNetworkMap")
+	require.True(t, result.NetworkMap.DNSConfig.ServiceEnable, "DNS management must remain enabled")
+	require.Len(t, result.NetworkMap.DNSConfig.NameServerGroups, 1,
+		"the receiving peer's distribution group must keep its nameserver")
+	require.Len(t, result.NetworkMap.DNSConfig.NameServerGroups[0].NameServers, 1)
+	require.EqualValues(t, 5353, result.NetworkMap.DNSConfig.NameServerGroups[0].NameServers[0].Port)
+	require.Equal(t, c.Peers["peer-B"].IP.String(),
+		result.NetworkMap.DNSConfig.NameServerGroups[0].NameServers[0].IP)
+}
+
 // TestCalculate_FirewallRuleProtocol_NeverNetbirdSSH guards against the
 // scenario where a rule with Protocol=NetbirdSSH leaks the enum value into
 // proto.FirewallRule.Protocol. Calculate() must rewrite NetbirdSSH → TCP
