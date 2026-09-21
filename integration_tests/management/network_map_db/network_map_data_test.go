@@ -16,6 +16,7 @@ import (
 	"github.com/netbirdio/netbird/management/server/integrations/integrated_validator"
 	"github.com/netbirdio/netbird/management/server/settings"
 	"github.com/netbirdio/netbird/management/server/types"
+	"github.com/netbirdio/netbird/shared/management/networkmap/nmdata"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -71,4 +72,14 @@ func TestGetNetworkMapData(t *testing.T) {
 		goldenNMap = string(serializedNMap)
 	}
 	assert.Equal(t, goldenNMap, string(serializedNMap))
+
+	// Exercise the persisted SQLite -> NetworkMapData -> per-peer DNS path.
+	// The fixture assigns peer-id-331 to 33-group-one-resource-id and assigns
+	// both persisted nameserver groups to that distribution group.
+	nmap.ValidatedPeers["peer-id-331"] = struct{}{}
+	components := nmap.GetPeerNetworkMapComponents("peer-id-331", nmdata.CustomZone{})
+	assert.NotEmpty(t, components.NameServerGroups, "persisted nameserver groups must reach peer components")
+	calculated := components.Calculate(ctx)
+	assert.True(t, calculated.DNSConfig.ServiceEnable, "DNS management must stay enabled for the peer")
+	assert.NotEmpty(t, calculated.DNSConfig.NameServerGroups, "persisted nameserver groups must survive calculation")
 }
