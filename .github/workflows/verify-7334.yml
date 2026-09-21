@@ -16,7 +16,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Network map envelope tests
-        run: go test ./shared/management/networkmap -run 'NameServerGroup' -count=1 -v
+        run: go test ./shared/management/networkmap -run 'NameServerGroup|MultipleGroupsWithMissingPublicIDs' -count=1 -v
       - name: SQLite network map DB tests
         env:
           NETBIRD_STORE_ENGINE: sqlite
