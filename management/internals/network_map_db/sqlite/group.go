@@ -13,7 +13,7 @@ const (
 	GetGroupsQuery = `
 	select groups.id, groups.name, groups.public_id, groups.resources, gp.peer_id
 	from groups 
-	left join group_peers gp on gp.group_id=groups.id and gp.account_id=?
+	left join group_peers gp on gp.group_id=groups.id
 	where groups.account_id=?
 	`
 )
@@ -22,7 +22,7 @@ const (
 // an alternative is to add json indexes, query this directly. Not sure how expensive
 // json indexes are. TODO (dmitri) verify and maybe change the implementation here.
 func (sc *SqliteStoreConn) GetGroups(ctx context.Context, accountId string) ([]nmdata.Group, map[string]map[string]any, error) {
-	rows, err := sc.Conn.QueryContext(ctx, GetGroupsQuery, accountId, accountId)
+	rows, err := sc.Conn.QueryContext(ctx, GetGroupsQuery, accountId)
 	if err != nil {
 		return nil, nil, err
 	}
