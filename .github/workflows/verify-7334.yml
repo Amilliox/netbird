@@ -1,0 +1,23 @@
+name: Verify nameserver map
+
+on:
+  push:
+    branches:
+      - repro-7334-v0782
+  workflow_dispatch:
+
+jobs:
+  targeted:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Network map envelope tests
+        run: go test ./shared/management/networkmap -run 'NameServerGroup' -count=1 -v
+      - name: SQLite network map DB tests
+        env:
+          NETBIRD_STORE_ENGINE: sqlite
+        run: go test -tags=integration ./integration_tests/management/network_map_db -run 'TestGetNetworkMapData' -count=1 -v
