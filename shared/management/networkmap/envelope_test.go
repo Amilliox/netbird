@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -128,6 +129,66 @@ func TestEnvelopeToNetworkMap_NameServerGroupWithMissingPublicIDs(t *testing.T) 
 	require.True(t, result.NetworkMap.DNSConfig.ServiceEnable)
 	require.Len(t, result.NetworkMap.DNSConfig.NameServerGroups, 1,
 		"missing public IDs must not silently drop the persisted nameserver assignment")
+}
+
+
+// TestEnvelopeToNetworkMap_MultipleGroupsWithMissingPublicIDs covers upgraded
+// accounts where more than one group has no public_id. The wire format keys
+// groups by PublicID, so duplicate empty IDs must not collapse the target
+// peer's custom distribution group.
+func TestEnvelopeToNetworkMap_MultipleGroupsWithMissingPublicIDs(t *testing.T) {
+	c, localPeerKey := buildSmokeComponents(t)
+
+	// Target peer belongs to a custom DNS distribution group.
+	c.Groups = map[string]*nmdata.Group{
+		"group-custom": {
+			PublicID: "",
+			Name:     "dns-clients",
+			Peers:    []string{"peer-A"},
+		},
+		"group-all": {
+			PublicID: "",
+			Name:     "All",
+			Peers:    []string{"peer-B"},
+		},
+	}
+	c.NameServerGroups = []*nmdata.NameServerGroup{{
+		ID:       "nsg-internal",
+		PublicID: "",
+		NameServers: []nmdata.NameServer{{
+			IP:     c.Peers["peer-B"].IP,
+			NSType: 1,
+			Port:   5353,
+		}},
+		Groups:  []string{"group-custom"},
+		Primary: true,
+		Enabled: true,
+	}}
+
+	envelope := mgmtgrpc.EncodeNetworkMapEnvelope(mgmtgrpc.ComponentsEnvelopeInput{
+		Components: c,
+		DNSDomain:  "netbird.cloud",
+	})
+
+	// Both groups have the same wire ID. Put the non-target group last so the
+	// decoder's ID-keyed map deterministically exercises the collision.
+	full := envelope.GetFull()
+	require.Len(t, full.Groups, 2)
+	sort.SliceStable(full.Groups, func(i, j int) bool {
+		return full.Groups[i].IsAll == false && full.Groups[j].IsAll == true
+	})
+
+	wire, err := goproto.Marshal(envelope)
+	require.NoError(t, err)
+
+	var decoded proto.NetworkMapEnvelope
+	require.NoError(t, goproto.Unmarshal(wire, &decoded))
+
+	result, err := nbnetworkmap.EnvelopeToNetworkMap(context.Background(), &decoded, localPeerKey, "netbird.cloud")
+	require.NoError(t, err)
+	require.True(t, result.NetworkMap.DNSConfig.ServiceEnable)
+	require.Len(t, result.NetworkMap.DNSConfig.NameServerGroups, 1,
+		"duplicate empty public IDs must not collapse the target peer's distribution group")
 }
 
 // TestCalculate_FirewallRuleProtocol_NeverNetbirdSSH guards against the
