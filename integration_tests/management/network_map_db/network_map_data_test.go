@@ -44,7 +44,7 @@ func TestGetNetworkMapData(t *testing.T) {
 			"peer-id-1": {},
 			"peer-id-2": {},
 			"peer-id-3": {},
-		}, nil)
+		}, nil).AnyTimes()
 
 	storeImpl := networkmapdb.NetworkMapDBStoreImpl{
 		Store:                   store(t),
