@@ -93,6 +93,7 @@ func TestGetNetworkMapData(t *testing.T) {
 	assert.NoError(t, err)
 	staleNMap.ValidatedPeers["peer-id-331"] = struct{}{}
 	staleComponents := staleNMap.GetPeerNetworkMapComponents("peer-id-331", nmdata.CustomZone{})
-	assert.NotEmpty(t, staleComponents.NameServerGroups,
+	staleCalculated := staleComponents.Calculate(ctx)
+	assert.NotEmpty(t, staleCalculated.DNSConfig.NameServerGroups,
 		"nameserver delivery must not depend on redundant group_peers.account_id")
 }
