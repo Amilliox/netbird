@@ -92,7 +92,7 @@ func TestEnvelopeToNetworkMap_NameServerGroupForCustomDistributionGroup(t *testi
 	require.Len(t, result.NetworkMap.DNSConfig.NameServerGroups[0].NameServers, 1)
 	require.EqualValues(t, 5353, result.NetworkMap.DNSConfig.NameServerGroups[0].NameServers[0].Port)
 	require.Equal(t, c.Peers["peer-B"].IP.String(),
-		result.NetworkMap.DNSConfig.NameServerGroups[0].NameServers[0].IP.String())
+		result.NetworkMap.DNSConfig.NameServerGroups[0].NameServers[0].IP)
 }
 
 // TestCalculate_FirewallRuleProtocol_NeverNetbirdSSH guards against the
