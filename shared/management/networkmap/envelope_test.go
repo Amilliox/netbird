@@ -89,6 +89,47 @@ func TestEnvelopeToNetworkMap_NameServerGroupForCustomDistributionGroup(t *testi
 		result.NetworkMap.DNSConfig.NameServerGroups[0].NameServers[0].IP)
 }
 
+
+// TestEnvelopeToNetworkMap_NameServerGroupWithMissingPublicIDs covers upgraded
+// accounts where the legacy internal IDs are intact but public_id was not
+// backfilled. The component envelope must not silently lose group membership
+// and nameserver references in that state.
+func TestEnvelopeToNetworkMap_NameServerGroupWithMissingPublicIDs(t *testing.T) {
+	c, localPeerKey := buildSmokeComponents(t)
+
+	c.Groups["group-all"].Name = "dns-clients"
+	c.Groups["group-all"].Peers = []string{"peer-A"}
+	c.Groups["group-all"].PublicID = ""
+	c.NameServerGroups = []*nmdata.NameServerGroup{{
+		ID:       "nsg-internal",
+		PublicID: "",
+		NameServers: []nmdata.NameServer{{
+			IP:     c.Peers["peer-B"].IP,
+			NSType: 1,
+			Port:   5353,
+		}},
+		Groups:  []string{"group-all"},
+		Primary: true,
+		Enabled: true,
+	}}
+
+	envelope := mgmtgrpc.EncodeNetworkMapEnvelope(mgmtgrpc.ComponentsEnvelopeInput{
+		Components: c,
+		DNSDomain:  "netbird.cloud",
+	})
+	wire, err := goproto.Marshal(envelope)
+	require.NoError(t, err)
+
+	var decoded proto.NetworkMapEnvelope
+	require.NoError(t, goproto.Unmarshal(wire, &decoded))
+
+	result, err := nbnetworkmap.EnvelopeToNetworkMap(context.Background(), &decoded, localPeerKey, "netbird.cloud")
+	require.NoError(t, err)
+	require.True(t, result.NetworkMap.DNSConfig.ServiceEnable)
+	require.Len(t, result.NetworkMap.DNSConfig.NameServerGroups, 1,
+		"missing public IDs must not silently drop the persisted nameserver assignment")
+}
+
 // TestCalculate_FirewallRuleProtocol_NeverNetbirdSSH guards against the
 // scenario where a rule with Protocol=NetbirdSSH leaks the enum value into
 // proto.FirewallRule.Protocol. Calculate() must rewrite NetbirdSSH → TCP
