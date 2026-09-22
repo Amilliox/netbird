@@ -1,0 +1,17 @@
+name: VAIB 7334 Repro
+
+on:
+  push:
+    branches:
+      - vaib/repro-7334-v0782
+
+jobs:
+  repro:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run production-shaped envelope repro
+        run: go test ./shared/management/networkmap -run '^TestVAIB7334_RealisticAllMembership$' -count=1 -v
